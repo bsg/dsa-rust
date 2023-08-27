@@ -35,6 +35,15 @@ impl<T> LinkedList<T> {
     }
 }
 
+impl<T> Drop for LinkedList<T> {
+    fn drop(&mut self) {
+        let mut link = mem::replace(&mut self.head, None);
+        while let Some(mut node) = link {
+            link = mem::replace(&mut node.next, None);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::LinkedList;
