@@ -5,13 +5,13 @@ struct Node<T> {
     next: Option<Box<Node<T>>>,
 }
 
-pub struct List<T> {
+pub struct LinkedList<T> {
     head: Option<Box<Node<T>>>,
 }
 
-impl<T> List<T> {
-    pub fn new() -> List<T> {
-        List { head: None }
+impl<T> LinkedList<T> {
+    pub fn new() -> LinkedList<T> {
+        LinkedList { head: None }
     }
 
     pub fn push(&mut self, item: T) {
@@ -37,12 +37,13 @@ impl<T> List<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::List;
+    use super::LinkedList;
 
     #[test]
     fn push_pop() {
-        let mut list = List::new();
+        let mut list = LinkedList::new();
         (0..10).for_each(|n| list.push(n));
         (0..10).rev().for_each(|n| assert_eq!(list.pop(), Some(n)));
+        assert_eq!(list.pop(), None);
     }
 }
