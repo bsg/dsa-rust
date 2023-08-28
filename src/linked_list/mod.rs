@@ -118,7 +118,7 @@ impl<'a, T> IntoIterator for &'a LinkedList<T> {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
-    fn into_iter(self) -> Iter<'a, T> {
+    fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
@@ -127,7 +127,7 @@ impl<'a, T> IntoIterator for &'a mut LinkedList<T> {
     type Item = &'a mut T;
     type IntoIter = IterMut<'a, T>;
 
-    fn into_iter(self) -> IterMut<'a, T> {
+    fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
 }
@@ -150,6 +150,7 @@ mod tests {
         list.push(1);
         list.push(2);
         assert_eq!(list.peek(), Some(&2));
+
         list.peek_mut().map(|item| *item = 3);
         assert_eq!(list.peek(), Some(&3));
     }
@@ -163,6 +164,7 @@ mod tests {
             .rev()
             .zip(list.iter())
             .for_each(|(x, y)| assert_eq!(x, *y));
+        
         list.iter_mut().for_each(|item| *item = 0);
         assert_eq!(list.iter().sum::<u32>(), 0);
     }
