@@ -7,13 +7,13 @@ struct Node<T> {
     next: Link<T>,
 }
 
-pub struct LinkedList<T> {
+pub struct List<T> {
     head: Link<T>,
 }
 
-impl<T> LinkedList<T> {
+impl<T> List<T> {
     pub fn new() -> Self {
-        LinkedList { head: None }
+        List { head: None }
     }
 
     pub fn push(&mut self, item: T) {
@@ -56,7 +56,7 @@ impl<T> LinkedList<T> {
     }
 }
 
-impl<T> Drop for LinkedList<T> {
+impl<T> Drop for List<T> {
     fn drop(&mut self) {
         let mut link = mem::take(&mut self.head);
         while let Some(mut node) = link {
@@ -95,7 +95,7 @@ impl<'a, T> std::iter::Iterator for IterMut<'a, T> {
     }
 }
 
-pub struct IntoIter<T>(LinkedList<T>);
+pub struct IntoIter<T>(List<T>);
 
 impl<T> std::iter::Iterator for IntoIter<T> {
     type Item = T;
@@ -105,7 +105,7 @@ impl<T> std::iter::Iterator for IntoIter<T> {
     }
 }
 
-impl<T> IntoIterator for LinkedList<T> {
+impl<T> IntoIterator for List<T> {
     type Item = T;
     type IntoIter = IntoIter<T>;
 
@@ -114,7 +114,7 @@ impl<T> IntoIterator for LinkedList<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a LinkedList<T> {
+impl<'a, T> IntoIterator for &'a List<T> {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
@@ -123,7 +123,7 @@ impl<'a, T> IntoIterator for &'a LinkedList<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut LinkedList<T> {
+impl<'a, T> IntoIterator for &'a mut List<T> {
     type Item = &'a mut T;
     type IntoIter = IterMut<'a, T>;
 
@@ -134,11 +134,11 @@ impl<'a, T> IntoIterator for &'a mut LinkedList<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::LinkedList;
+    use super::List;
 
     #[test]
     fn push_pop() {
-        let mut list = LinkedList::new();
+        let mut list = List::new();
         (0..10).for_each(|n| list.push(n));
         (0..10).rev().for_each(|n| assert_eq!(list.pop(), Some(n)));
         assert_eq!(list.pop(), None);
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn peek() {
-        let mut list = LinkedList::new();
+        let mut list = List::new();
         list.push(1);
         list.push(2);
         assert_eq!(list.peek(), Some(&2));
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn iter() {
-        let mut list = LinkedList::new();
+        let mut list = List::new();
         (0..10).for_each(|n| list.push(n));
         (0..10)
             .into_iter()

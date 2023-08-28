@@ -1,9 +1,9 @@
-use linked_list::LinkedList;
+use singly_linked_list::List;
 
-mod linked_list;
+mod singly_linked_list;
 
 fn main() {
-    let mut list = LinkedList::new();
+    let mut list = List::new();
     list.push(1);
     list.push(5);
 
