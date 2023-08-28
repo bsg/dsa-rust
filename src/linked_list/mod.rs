@@ -39,10 +39,6 @@ impl<T> LinkedList<T> {
         self.head.as_mut().map(|node| &mut node.item)
     }
 
-    pub fn into_iter(self) -> IntoIter<T> {
-        IntoIter(self)
-    }
-
     pub fn iter(&self) -> Iter<T> {
         Iter {
             next: self.head.as_deref(),
@@ -54,6 +50,10 @@ impl<T> LinkedList<T> {
             next: self.head.as_deref_mut(),
         }
     }
+
+    pub fn into_iter(self) -> IntoIter<T> {
+        IntoIter(self)
+    }
 }
 
 impl<T> Drop for LinkedList<T> {
@@ -62,16 +62,6 @@ impl<T> Drop for LinkedList<T> {
         while let Some(mut node) = link {
             link = mem::take(&mut node.next);
         }
-    }
-}
-
-pub struct IntoIter<T>(LinkedList<T>);
-
-impl<T> std::iter::Iterator for IntoIter<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.pop()
     }
 }
 
@@ -102,6 +92,43 @@ impl<'a, T> std::iter::Iterator for IterMut<'a, T> {
             self.next = node.next.as_deref_mut();
             &mut node.item
         })
+    }
+}
+
+pub struct IntoIter<T>(LinkedList<T>);
+
+impl<T> std::iter::Iterator for IntoIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.pop()
+    }
+}
+
+impl<T> IntoIterator for LinkedList<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter(self)
+    }
+}
+
+impl<'a, T> IntoIterator for &'a LinkedList<T> {
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Iter<'a, T> {
+        self.iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut LinkedList<T> {
+    type Item = &'a mut T;
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> IterMut<'a, T> {
+        self.iter_mut()
     }
 }
 
