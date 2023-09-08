@@ -1,5 +1,6 @@
 use std::{
     alloc,
+    ops::{Deref, DerefMut},
     ptr::{self, NonNull},
 };
 
@@ -76,6 +77,19 @@ impl<T> Drop for Vec<T> {
     }
 }
 
+impl<T> Deref for Vec<T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+}
+
+impl<T> DerefMut for Vec<T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Vec;
@@ -102,5 +116,20 @@ mod tests {
         assert_eq!(vec.pop(), Some(3));
         assert_eq!(vec.pop(), Some(2));
         assert_eq!(vec.pop(), Some(1));
+    }
+
+    #[test]
+    fn deref() {
+        let mut vec = Vec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        
+        assert_eq!(vec[0], 1);
+
+        vec[0] = 2;
+        assert_eq!(vec[0], 2);
+
+        assert_eq!(vec[1..=2], [2, 3]);
     }
 }
