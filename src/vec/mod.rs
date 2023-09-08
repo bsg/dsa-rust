@@ -21,7 +21,11 @@ impl<T> Vec<T> {
 
     pub fn push(&mut self, item: T) {
         if self.len == self.cap {
-            self.grow();
+            if self.len == 0 {
+                self.grow(1);
+            } else {
+                self.grow(self.len * 2);
+            }
         }
 
         unsafe {
@@ -40,11 +44,36 @@ impl<T> Vec<T> {
     }
 
     pub fn insert(&mut self, index: usize, item: T) {
-        todo!()
+        assert!(index <= self.len);
+
+        if self.len == self.cap {
+            self.grow(self.len * 2);
+        }
+
+        unsafe {
+            ptr::copy(
+                self.as_ptr().add(index),
+                self.ptr.as_ptr().add(index + 1),
+                self.len - index,
+            );
+            ptr::write(self.as_mut_ptr().add(index), item);
+        }
+        self.len += 1;
     }
 
-    pub fn remove(&mut self, index: usize) {
-        todo!()
+    pub fn remove(&mut self, index: usize) -> T {
+        assert!(index < self.len);
+
+        unsafe {
+            let item = ptr::read(self.as_ptr().add(index));
+            ptr::copy(
+                self.as_ptr().add(index + 1),
+                self.ptr.as_ptr().add(index),
+                self.len - index - 1,
+            );
+            self.len -= 1;
+            item
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -55,24 +84,21 @@ impl<T> Vec<T> {
         self.cap
     }
 
-    fn grow(&mut self) {
-        if self.len == 0 {
-            let layout = alloc::Layout::array::<T>(1).unwrap();
-            unsafe { self.ptr = NonNull::<T>::new(alloc::alloc(layout) as *mut T).unwrap() };
-            self.cap = 1;
-        } else {
-            let old_layout = alloc::Layout::array::<T>(self.cap).unwrap();
-            let new_layout = alloc::Layout::array::<T>(self.cap * 2).unwrap();
-            unsafe {
-                self.ptr = NonNull::<T>::new(alloc::realloc(
-                    self.ptr.as_ptr() as *mut u8,
-                    old_layout,
-                    new_layout.size(),
-                ) as *mut T)
-                .unwrap()
-            }
-            self.cap *= 2;
+    fn grow(&mut self, new_size: usize) {
+        let old_layout = alloc::Layout::array::<T>(self.cap).unwrap();
+        let new_layout = alloc::Layout::array::<T>(new_size).unwrap();
+
+        unsafe {
+            let ptr = if self.cap == 0 {
+                alloc::alloc(new_layout) as *mut T
+            } else {
+                alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_layout.size())
+                    as *mut T
+            };
+            self.ptr = NonNull::<T>::new(ptr).unwrap();
         }
+
+        self.cap = new_size;
     }
 }
 
@@ -101,6 +127,7 @@ impl<T> DerefMut for Vec<T> {
 impl<T: Clone> From<&[T]> for Vec<T> {
     fn from(slice: &[T]) -> Vec<T> {
         let mut vec = Self::new();
+        // TODO reserve slice.len first
         for item in slice {
             vec.push((*item).clone());
         }
@@ -111,6 +138,7 @@ impl<T: Clone> From<&[T]> for Vec<T> {
 impl<T: Clone> From<&mut [T]> for Vec<T> {
     fn from(slice: &mut [T]) -> Vec<T> {
         let mut vec = Self::new();
+        // TODO reserve slice.len first
         for item in slice {
             vec.push((*item).clone());
         }
@@ -153,5 +181,27 @@ mod tests {
         vec[0] = 2;
         assert_eq!(vec[0], 2);
         assert_eq!(vec[1..=2], [2, 3]);
+    }
+
+    #[test]
+    fn insert() {
+        let mut vec = Vec::from([1, 2, 3].as_slice());
+        vec.insert(1, 5);
+        assert_eq!(vec.len, 4);
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 5);
+        assert_eq!(vec[2], 2);
+        assert_eq!(vec[3], 3);
+    }
+
+    #[test]
+    fn remove() {
+        let mut vec = Vec::from([1, 2, 3, 4, 5].as_slice());
+        assert_eq!(vec.remove(2), 3);
+        assert_eq!(vec.len, 4);
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 2);
+        assert_eq!(vec[2], 4);
+        assert_eq!(vec[3], 5);
     }
 }
