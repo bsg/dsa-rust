@@ -78,14 +78,14 @@ impl<T: Eq + Ord> BSTree<T> {
         let mut parent = None;
 
         unsafe {
-            while let Some(node) = nodeRef.as_ref() {
+            while let Some(node) = *nodeRef {
                 if value == node.as_ref().value {
                     return (parent, *nodeRef);
                 } else if value > node.as_ref().value {
-                    parent = Some(*node);
+                    parent = Some(node);
                     nodeRef = &node.as_ref().right;
                 } else {
-                    parent = Some(*node);
+                    parent = Some(node);
                     nodeRef = &node.as_ref().left;
                 }
             }
