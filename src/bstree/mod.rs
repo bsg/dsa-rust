@@ -1,4 +1,4 @@
-use std::{alloc, ptr::NonNull, mem};
+use std::{alloc, mem, ptr::NonNull};
 
 type NodeRef<T> = Option<NonNull<Node<T>>>;
 
@@ -39,11 +39,11 @@ impl<T: Eq + Ord> BSTree<T> {
     }
 
     pub fn contains(&self, value: T) -> bool {
-        self.locate(value).1.is_some()
+        self.locate(value).is_some()
     }
 
     pub fn remove(&mut self, value: T) -> bool {
-        let (mut parent, mut nodeRef) = self.locate(value);
+        let mut nodeRef = self.locate(value);
         if nodeRef.is_none() {
             return false;
         };
@@ -55,7 +55,7 @@ impl<T: Eq + Ord> BSTree<T> {
             ) {
                 (None, None) => {
                     nodeRef.take(); // TODO
-                },
+                }
                 (None, Some(_)) => todo!(),
                 (Some(_), None) => todo!(),
                 (Some(_), Some(_)) => todo!(),
@@ -73,25 +73,22 @@ impl<T: Eq + Ord> BSTree<T> {
         }
     }
 
-    fn locate(&self, value: T) -> (NodeRef<T>, NodeRef<T>) {
+    fn locate(&self, value: T) -> NodeRef<T> {
         let mut nodeRef = &self.root;
-        let mut parent = None;
 
         unsafe {
             while let Some(node) = *nodeRef {
                 if value == node.as_ref().value {
-                    return (parent, *nodeRef);
+                    return *nodeRef;
                 } else if value > node.as_ref().value {
-                    parent = Some(node);
                     nodeRef = &node.as_ref().right;
                 } else {
-                    parent = Some(node);
                     nodeRef = &node.as_ref().left;
                 }
             }
         }
 
-        (None, None)
+        None
     }
 }
 
