@@ -39,6 +39,14 @@ impl<T> Vec<T> {
         }
     }
 
+    pub fn insert(&mut self, index: usize, item: T) {
+        todo!()
+    }
+
+    pub fn remove(&mut self, index: usize) {
+        todo!()
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -90,6 +98,26 @@ impl<T> DerefMut for Vec<T> {
     }
 }
 
+impl<T: Clone> From<&[T]> for Vec<T> {
+    fn from(slice: &[T]) -> Vec<T> {
+        let mut vec = Self::new();
+        for item in slice {
+            vec.push((*item).clone());
+        }
+        vec
+    }
+}
+
+impl<T: Clone> From<&mut [T]> for Vec<T> {
+    fn from(slice: &mut [T]) -> Vec<T> {
+        let mut vec = Self::new();
+        for item in slice {
+            vec.push((*item).clone());
+        }
+        vec
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Vec;
@@ -120,16 +148,10 @@ mod tests {
 
     #[test]
     fn deref() {
-        let mut vec = Vec::new();
-        vec.push(1);
-        vec.push(2);
-        vec.push(3);
-        
+        let mut vec = Vec::from([1, 2, 3].as_slice());
         assert_eq!(vec[0], 1);
-
         vec[0] = 2;
         assert_eq!(vec[0], 2);
-
         assert_eq!(vec[1..=2], [2, 3]);
     }
 }
