@@ -43,18 +43,18 @@ impl<T: Eq + Ord> BSTree<T> {
     }
 
     pub fn remove(&mut self, value: T) -> bool {
-        let mut nodeRef = self.locate(value);
-        if nodeRef.is_none() {
-            return false;
-        };
-
+        let mut nodeRef = self.locate_mut_ptr(value);
         unsafe {
+            if (*nodeRef).is_none() {
+                return false;
+            };
+
             match (
-                nodeRef.unwrap().as_ref().left,
-                nodeRef.unwrap().as_ref().right,
+                (*nodeRef).unwrap().as_ref().left,
+                (*nodeRef).unwrap().as_ref().right,
             ) {
                 (None, None) => {
-                    nodeRef.take(); // TODO
+                    (*nodeRef).take(); // TODO
                 }
                 (None, Some(_)) => todo!(),
                 (Some(_), None) => todo!(),
@@ -89,6 +89,24 @@ impl<T: Eq + Ord> BSTree<T> {
         }
 
         None
+    }
+
+    fn locate_mut_ptr(&mut self, value: T) -> *mut NodeRef<T> {
+        let mut nodeRef = &mut self.root;
+
+        unsafe {
+            while let Some(mut node) = *nodeRef {
+                if value == node.as_ref().value {
+                    return &mut *nodeRef as *mut NodeRef<T>;
+                } else if value > node.as_ref().value {
+                    nodeRef = &mut node.as_mut().right;
+                } else {
+                    nodeRef = &mut node.as_mut().left;
+                }
+            }
+        }
+
+        &mut None
     }
 }
 
