@@ -88,6 +88,7 @@ impl<T> Vec<T> {
         self.grow(len);
     }
 
+    // TODO make this safer
     fn grow(&mut self, new_size: usize) {
         let old_layout = alloc::Layout::array::<T>(self.cap).unwrap();
         let new_layout = alloc::Layout::array::<T>(new_size).unwrap();
