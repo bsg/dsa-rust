@@ -65,21 +65,15 @@ impl<T: Eq + Ord> BSTree<T> {
                     (*node_ref).replace(child);
                 }
                 (Some(left), Some(right)) => {
-                    // FIXME ugly af
-                    if let Some(mut successor) = self.successor((*node_ref).unwrap().as_ref()) {
-                        if successor != right {
-                            successor
-                                .as_mut()
-                                .right
-                                .replace(successor.as_ref().parent.unwrap());
-                        }
-                        successor.as_mut().left.replace(left);
-                        (*node_ref).replace(successor);
+                    let mut successor = self.successor((*node_ref).unwrap().as_ref()).unwrap(); // unwrap won't fail
+                    if successor != right {
+                        successor.as_mut().right = successor.as_ref().parent;
                     }
+                    successor.as_mut().left.replace(left);
+                    (*node_ref).replace(successor);
                 }
             }
         }
-
         true
     }
 
