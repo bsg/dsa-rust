@@ -84,6 +84,10 @@ impl<T> Vec<T> {
         self.cap
     }
 
+    pub fn reserve(&mut self, len: usize) {
+        self.grow(len);
+    }
+
     fn grow(&mut self, new_size: usize) {
         let old_layout = alloc::Layout::array::<T>(self.cap).unwrap();
         let new_layout = alloc::Layout::array::<T>(new_size).unwrap();
@@ -127,7 +131,7 @@ impl<T> DerefMut for Vec<T> {
 impl<T: Clone> From<&[T]> for Vec<T> {
     fn from(slice: &[T]) -> Vec<T> {
         let mut vec = Self::new();
-        // TODO reserve slice.len first
+        vec.grow(slice.len());
         for item in slice {
             vec.push((*item).clone());
         }
@@ -138,7 +142,7 @@ impl<T: Clone> From<&[T]> for Vec<T> {
 impl<T: Clone> From<&mut [T]> for Vec<T> {
     fn from(slice: &mut [T]) -> Vec<T> {
         let mut vec = Self::new();
-        // TODO reserve slice.len first
+        vec.grow(slice.len());
         for item in slice {
             vec.push((*item).clone());
         }
