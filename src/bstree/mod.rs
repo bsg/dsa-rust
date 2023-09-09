@@ -137,6 +137,39 @@ impl<T: Eq + Ord> BSTree<T> {
             }
         }
     }
+
+    pub fn iter(&self) -> Iter<T> {
+        Iter {
+            next: self.root,
+            stack: super::vec::Vec::new(),
+        }
+    }
+}
+
+struct Iter<T> {
+    next: NodeRef<T>,
+    stack: super::vec::Vec<NodeRef<T>>,
+}
+
+impl<T: Clone> Iterator for Iter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.stack.len() != 0 || self.next.is_some() {
+            if self.next.is_some() {
+                self.stack.push(self.next);
+                self.next = unsafe { self.next.unwrap().as_ref().left };
+            } else {
+                let node = self.stack.pop().unwrap();
+                unsafe {
+                    self.next = node.unwrap().as_ref().right;
+                    return Some(node.unwrap().as_ref().value.clone());
+                }
+            }
+        }
+
+        None
+    }
 }
 
 #[cfg(test)]
@@ -197,5 +230,18 @@ mod tests {
         assert!(tree.contains(5));
         assert!(tree.contains(4));
         assert!(tree.contains(6));
+    }
+
+    #[test]
+    fn iterator() {
+        let mut tree: BSTree<i32> = BSTree::new();
+        assert_eq!(tree.iter().next, None);
+
+        let mut items = [3, 4, 8, 11, 1, 54, 234, 111, 2, -5, 13, 0, 5];
+        items.iter().for_each(|item| tree.insert(*item));
+        items.sort();
+        tree.iter()
+            .zip(items.iter())
+            .for_each(|(a, &b)| assert_eq!(a, b));
     }
 }
