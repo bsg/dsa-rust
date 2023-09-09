@@ -1,9 +1,10 @@
-use std::{alloc, mem, ptr::NonNull};
+use std::{alloc, ptr::NonNull};
 
 type NodeRef<T> = Option<NonNull<Node<T>>>;
 
 struct Node<T> {
     value: T,
+    parent: NodeRef<T>,
     left: NodeRef<T>,
     right: NodeRef<T>,
 }
@@ -18,11 +19,13 @@ impl<T: Eq + Ord> BSTree<T> {
     }
 
     pub fn insert(&mut self, value: T) {
-        let mut nodeRef = &mut self.root;
+        let mut node_ref = &mut self.root;
+        let mut parent = None;
 
         unsafe {
-            while let Some(node) = nodeRef {
-                nodeRef = if value > node.as_ref().value {
+            while let Some(node) = node_ref {
+                parent = Some(*node);
+                node_ref = if value > node.as_ref().value {
                     &mut node.as_mut().right
                 } else {
                     &mut node.as_mut().left
@@ -31,10 +34,11 @@ impl<T: Eq + Ord> BSTree<T> {
 
             let mut new_node = Self::alloc_node();
             new_node.as_mut().value = value;
+            new_node.as_mut().parent = parent;
             new_node.as_mut().left = None;
             new_node.as_mut().right = None;
 
-            nodeRef.insert(new_node);
+            let _ = node_ref.insert(new_node);
         }
     }
 
@@ -43,22 +47,36 @@ impl<T: Eq + Ord> BSTree<T> {
     }
 
     pub fn remove(&mut self, value: T) -> bool {
-        let mut nodeRef = self.locate_mut_ptr(value);
+        let node_ref = self.locate_mut_ptr(value);
         unsafe {
-            if (*nodeRef).is_none() {
+            if (*node_ref).is_none() {
                 return false;
             };
 
             match (
-                (*nodeRef).unwrap().as_ref().left,
-                (*nodeRef).unwrap().as_ref().right,
+                (*node_ref).unwrap().as_ref().left,
+                (*node_ref).unwrap().as_ref().right,
             ) {
                 (None, None) => {
-                    (*nodeRef).take(); // TODO
+                    (*node_ref).take();
                 }
-                (None, Some(_)) => todo!(),
-                (Some(_), None) => todo!(),
-                (Some(_), Some(_)) => todo!(),
+                (None, Some(mut child)) | (Some(mut child), None) => {
+                    child.as_mut().parent.replace((*node_ref).unwrap());
+                    (*node_ref).replace(child);
+                }
+                (Some(left), Some(right)) => {
+                    // FIXME ugly af
+                    if let Some(mut successor) = self.successor((*node_ref).unwrap().as_ref()) {
+                        if successor != right {
+                            successor
+                                .as_mut()
+                                .right
+                                .replace(successor.as_ref().parent.unwrap());
+                        }
+                        successor.as_mut().left.replace(left);
+                        (*node_ref).replace(successor);
+                    }
+                }
             }
         }
 
@@ -74,16 +92,16 @@ impl<T: Eq + Ord> BSTree<T> {
     }
 
     fn locate(&self, value: T) -> NodeRef<T> {
-        let mut nodeRef = &self.root;
+        let mut node_ref = &self.root;
 
         unsafe {
-            while let Some(node) = *nodeRef {
+            while let Some(node) = *node_ref {
                 if value == node.as_ref().value {
-                    return *nodeRef;
+                    return *node_ref;
                 } else if value > node.as_ref().value {
-                    nodeRef = &node.as_ref().right;
+                    node_ref = &node.as_ref().right;
                 } else {
-                    nodeRef = &node.as_ref().left;
+                    node_ref = &node.as_ref().left;
                 }
             }
         }
@@ -92,21 +110,38 @@ impl<T: Eq + Ord> BSTree<T> {
     }
 
     fn locate_mut_ptr(&mut self, value: T) -> *mut NodeRef<T> {
-        let mut nodeRef = &mut self.root;
+        let mut node_ref = &mut self.root;
 
         unsafe {
-            while let Some(mut node) = *nodeRef {
+            while let Some(mut node) = *node_ref {
                 if value == node.as_ref().value {
-                    return &mut *nodeRef as *mut NodeRef<T>;
+                    return &mut *node_ref as *mut NodeRef<T>;
                 } else if value > node.as_ref().value {
-                    nodeRef = &mut node.as_mut().right;
+                    node_ref = &mut node.as_mut().right;
                 } else {
-                    nodeRef = &mut node.as_mut().left;
+                    node_ref = &mut node.as_mut().left;
                 }
             }
         }
 
         &mut None
+    }
+
+    // TODO see if making this take &mut Node<T> makes miri happy
+    fn successor(&mut self, node: &Node<T>) -> NodeRef<T> {
+        let mut node_ref = node;
+
+        unsafe {
+            if let Some(right) = node.right {
+                node_ref = right.as_ref();
+                while let Some(left) = node_ref.left {
+                    node_ref = left.as_ref();
+                }
+                Some(node_ref.into())
+            } else {
+                todo!()
+            }
+        }
     }
 }
 
@@ -135,5 +170,38 @@ mod tests {
         items.iter().for_each(|item| tree.insert(*item));
         tree.remove(4);
         assert!(!tree.contains(4));
+    }
+
+    #[test]
+    fn remove_node_with_one_child() {
+        let mut tree: BSTree<i32> = BSTree::new();
+        let items = [5, 1, 7, 2];
+        items.iter().for_each(|item| tree.insert(*item));
+        tree.remove(1);
+        assert!(!tree.contains(1));
+    }
+
+    #[test]
+    fn remove_node_with_child_successor() {
+        let mut tree: BSTree<i32> = BSTree::new();
+        let items = [7, 6, 8];
+        items.iter().for_each(|item| tree.insert(*item));
+        tree.remove(7);
+        assert!(!tree.contains(7));
+        assert!(tree.contains(6));
+        assert!(tree.contains(8));
+    }
+
+    #[test]
+    fn remove_node_with_non_child_successor() {
+        let mut tree: BSTree<i32> = BSTree::new();
+        let items = [3, 1, 5, 4, 6];
+        items.iter().for_each(|item| tree.insert(*item));
+        tree.remove(3);
+        assert!(!tree.contains(3));
+        assert!(tree.contains(1));
+        assert!(tree.contains(5));
+        assert!(tree.contains(4));
+        assert!(tree.contains(6));
     }
 }
