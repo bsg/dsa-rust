@@ -1,17 +1,28 @@
-use std::{alloc, fmt::Debug};
-
-pub struct BoundedQueue<T> {
-    front: usize,
-    rear: usize,
-    buffer: Box<[T]>,
-}
+use std::{
+    alloc,
+    fmt::Debug,
+    sync::{atomic, atomic::AtomicUsize, Condvar, Mutex, RwLock},
+};
 
 #[derive(Debug, PartialEq)]
 pub enum BoundedQueueError {
     Full,
 }
 
-impl<T> BoundedQueue<T> {
+pub struct BoundedQueue<T> {
+    front: AtomicUsize,
+    rear: AtomicUsize,
+
+    write_event: (Mutex<bool>, Condvar),
+    read_event: (Mutex<bool>, Condvar),
+
+    buffer: RwLock<Box<[T]>>,
+}
+
+unsafe impl<T> Send for BoundedQueue<T> {}
+unsafe impl<T> Sync for BoundedQueue<T> {}
+
+impl<T: Copy> BoundedQueue<T> {
     pub fn new(size: usize) -> BoundedQueue<T> {
         let buffer_layout = alloc::Layout::array::<T>(size + 1).unwrap();
         let boxed_buffer: Box<[T]>;
@@ -21,35 +32,96 @@ impl<T> BoundedQueue<T> {
             boxed_buffer = Box::from_raw(buffer);
         }
         BoundedQueue {
-            front: 0,
-            rear: 0,
-            buffer: boxed_buffer,
+            front: AtomicUsize::new(0),
+            rear: AtomicUsize::new(0),
+            read_event: (Mutex::new(false), Condvar::new()),
+            write_event: (Mutex::new(false), Condvar::new()),
+            buffer: RwLock::new(boxed_buffer),
         }
     }
 
-    pub fn enqueue(&mut self, item: T) -> Result<(), BoundedQueueError> {
-        if (self.front + 1) % self.buffer.len() == self.rear {
+    pub fn enqueue(&self, item: T) -> Result<(), BoundedQueueError> {
+        let mut buffer = self.buffer.write().unwrap();
+        let front = self.front.load(atomic::Ordering::Relaxed);
+        let rear = self.rear.load(atomic::Ordering::Relaxed);
+
+        if (front + 1) % buffer.len() == rear {
             Err(BoundedQueueError::Full)
         } else {
-            self.buffer[self.front] = item;
-            self.front = (self.front + 1) % self.buffer.len();
+            buffer[front] = item;
+            self.front
+                .store((front + 1) % buffer.len(), atomic::Ordering::Relaxed);
+            self.notify_write();
             Ok(())
         }
     }
 
-    pub fn dequeue(&mut self) -> Option<&T> {
-        if self.rear == self.front {
+    pub fn dequeue(&self) -> Option<T> {
+        let buffer = self.buffer.read().unwrap();
+        let front = self.front.load(atomic::Ordering::Relaxed);
+        let rear = self.rear.load(atomic::Ordering::Relaxed);
+
+        if rear == front {
             None
         } else {
-            let item = &self.buffer[self.rear];
-            self.rear = (self.rear + 1) % self.buffer.len();
+            let item = buffer[rear].clone();
+            self.rear
+                .store((rear + 1) % buffer.len(), atomic::Ordering::Relaxed);
+            self.notify_read();
             Some(item)
+        }
+    }
+
+    fn notify_read(&self) {
+        let mut read = self.read_event.0.lock().unwrap();
+        *read = true;
+        self.read_event.1.notify_one();
+    }
+
+    fn notify_write(&self) {
+        let mut write = self.write_event.0.lock().unwrap();
+        *write = true;
+        self.write_event.1.notify_one();
+    }
+
+    fn wait_read(&self) {
+        let read = self.read_event.0.lock().unwrap();
+        let _guard = self.read_event.1.wait(read).unwrap();
+    }
+
+    fn wait_write(&self) {
+        let written = self.write_event.0.lock().unwrap();
+        let _guard = self.write_event.1.wait(written).unwrap();
+    }
+
+    pub fn enqueue_blocking(&self, item: T) {
+        match self.enqueue(item) {
+            Ok(_) => (),
+            Err(BoundedQueueError::Full) => {
+                self.wait_read();
+                self.enqueue_blocking(item);
+            }
+        }
+    }
+
+    pub fn dequeue_blocking(&self) -> T {
+        match self.dequeue() {
+            Some(item) => item,
+            None => {
+                self.wait_write();
+                self.dequeue_blocking()
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        sync::{Arc, RwLock},
+        thread,
+    };
+
     use crate::queue::BoundedQueueError;
 
     use super::BoundedQueue;
@@ -58,9 +130,9 @@ mod tests {
     fn single_item() {
         let mut queue: BoundedQueue<u32> = BoundedQueue::new(1);
         queue.enqueue(1).unwrap();
-        assert_eq!(queue.dequeue(), Some(&1));
+        assert_eq!(queue.dequeue(), Some(1));
         queue.enqueue(2).unwrap();
-        assert_eq!(queue.dequeue(), Some(&2));
+        assert_eq!(queue.dequeue(), Some(2));
     }
 
     #[test]
@@ -70,10 +142,10 @@ mod tests {
         queue.enqueue(2).unwrap();
         queue.enqueue(3).unwrap();
         queue.enqueue(4).unwrap();
-        assert_eq!(queue.dequeue(), Some(&1));
-        assert_eq!(queue.dequeue(), Some(&2));
-        assert_eq!(queue.dequeue(), Some(&3));
-        assert_eq!(queue.dequeue(), Some(&4));
+        assert_eq!(queue.dequeue(), Some(1));
+        assert_eq!(queue.dequeue(), Some(2));
+        assert_eq!(queue.dequeue(), Some(3));
+        assert_eq!(queue.dequeue(), Some(4));
     }
 
     #[test]
@@ -81,5 +153,24 @@ mod tests {
         let mut queue: BoundedQueue<u32> = BoundedQueue::new(1);
         queue.enqueue(1).unwrap();
         assert_eq!(queue.enqueue(2).expect_err(""), BoundedQueueError::Full);
+    }
+
+    #[test]
+    fn spsc() {
+        let mut queue: Arc<RwLock<BoundedQueue<u32>>> = Arc::new(RwLock::new(BoundedQueue::new(3)));
+        let mut sender = queue.clone();
+        let mut receiver = queue.clone();
+
+        thread::spawn(move || {
+            let tx = sender.read().unwrap();
+            tx.enqueue_blocking(1);
+            tx.enqueue_blocking(2);
+            tx.enqueue_blocking(3);
+        });
+
+        let rx = receiver.read().unwrap();
+        assert_eq!(1, rx.dequeue_blocking());
+        assert_eq!(2, rx.dequeue_blocking());
+        assert_eq!(3, rx.dequeue_blocking());
     }
 }
