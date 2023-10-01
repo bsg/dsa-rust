@@ -13,8 +13,8 @@ pub struct BoundedQueue<T> {
     front: AtomicUsize,
     rear: AtomicUsize,
 
-    write_event: (Mutex<bool>, Condvar),
-    read_event: (Mutex<bool>, Condvar),
+    write_event: (Mutex<()>, Condvar),
+    read_event: (Mutex<()>, Condvar),
 
     buffer: RwLock<Box<[T]>>,
 }
@@ -34,8 +34,8 @@ impl<T: Copy> BoundedQueue<T> {
         BoundedQueue {
             front: AtomicUsize::new(0),
             rear: AtomicUsize::new(0),
-            read_event: (Mutex::new(false), Condvar::new()),
-            write_event: (Mutex::new(false), Condvar::new()),
+            read_event: (Mutex::new(()), Condvar::new()),
+            write_event: (Mutex::new(()), Condvar::new()),
             buffer: RwLock::new(boxed_buffer),
         }
     }
@@ -73,14 +73,10 @@ impl<T: Copy> BoundedQueue<T> {
     }
 
     fn notify_read(&self) {
-        let mut read = self.read_event.0.lock().unwrap();
-        *read = true;
         self.read_event.1.notify_one();
     }
 
     fn notify_write(&self) {
-        let mut write = self.write_event.0.lock().unwrap();
-        *write = true;
         self.write_event.1.notify_one();
     }
 
@@ -157,7 +153,7 @@ mod tests {
 
     #[test]
     fn spsc() {
-        let mut queue: Arc<RwLock<BoundedQueue<u32>>> = Arc::new(RwLock::new(BoundedQueue::new(3)));
+        let mut queue: Arc<RwLock<BoundedQueue<u32>>> = Arc::new(RwLock::new(BoundedQueue::new(1)));
         let mut sender = queue.clone();
         let mut receiver = queue.clone();
 
@@ -172,5 +168,35 @@ mod tests {
         assert_eq!(1, rx.dequeue_blocking());
         assert_eq!(2, rx.dequeue_blocking());
         assert_eq!(3, rx.dequeue_blocking());
+    }
+
+    #[test]
+    fn mpsc() {
+        let mut queue: Arc<RwLock<BoundedQueue<u32>>> = Arc::new(RwLock::new(BoundedQueue::new(1)));
+        let mut sender1 = queue.clone();
+        let mut sender2 = queue.clone();
+        let mut receiver = queue.clone();
+
+        thread::spawn(move || {
+            let tx = sender1.read().unwrap();
+            tx.enqueue_blocking(1);
+            tx.enqueue_blocking(1);
+            tx.enqueue_blocking(1);
+        });
+
+        thread::spawn(move || {
+            let tx = sender2.read().unwrap();
+            tx.enqueue_blocking(1);
+            tx.enqueue_blocking(1);
+            tx.enqueue_blocking(1);
+        });
+
+        let rx = receiver.read().unwrap();
+        assert_eq!(1, rx.dequeue_blocking());
+        assert_eq!(1, rx.dequeue_blocking());
+        assert_eq!(1, rx.dequeue_blocking());
+        assert_eq!(1, rx.dequeue_blocking());
+        assert_eq!(1, rx.dequeue_blocking());
+        assert_eq!(1, rx.dequeue_blocking());
     }
 }
