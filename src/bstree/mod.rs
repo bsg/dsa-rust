@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{alloc, ptr::NonNull};
 
 type NodeRef<T> = Option<NonNull<Node<T>>>;
@@ -123,7 +125,7 @@ impl<T: Eq + Ord> BSTree<T> {
 
     // TODO see if making this take &mut Node<T> makes miri happy
     fn successor(&mut self, node: &Node<T>) -> NodeRef<T> {
-        let mut node_ref = node;
+        let mut node_ref;
 
         unsafe {
             if let Some(right) = node.right {
@@ -146,7 +148,7 @@ impl<T: Eq + Ord> BSTree<T> {
     }
 }
 
-struct Iter<T> {
+pub struct Iter<T> {
     next: NodeRef<T>,
     stack: super::vec::Vec<NodeRef<T>>,
 }
@@ -178,7 +180,7 @@ mod tests {
 
     #[test]
     fn empty() {
-        let mut tree: BSTree<i32> = BSTree::new();
+        let tree: BSTree<i32> = BSTree::new();
         assert!(!tree.contains(1));
     }
 

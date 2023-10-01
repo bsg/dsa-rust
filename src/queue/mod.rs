@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{
     alloc,
     fmt::Debug,
@@ -124,7 +126,7 @@ mod tests {
 
     #[test]
     fn single_item() {
-        let mut queue: BoundedQueue<u32> = BoundedQueue::new(1);
+        let queue: BoundedQueue<u32> = BoundedQueue::new(1);
         queue.enqueue(1).unwrap();
         assert_eq!(queue.dequeue(), Some(1));
         queue.enqueue(2).unwrap();
@@ -133,7 +135,7 @@ mod tests {
 
     #[test]
     fn multiple_items() {
-        let mut queue: BoundedQueue<u32> = BoundedQueue::new(5);
+        let queue: BoundedQueue<u32> = BoundedQueue::new(5);
         queue.enqueue(1).unwrap();
         queue.enqueue(2).unwrap();
         queue.enqueue(3).unwrap();
@@ -146,16 +148,16 @@ mod tests {
 
     #[test]
     fn full() {
-        let mut queue: BoundedQueue<u32> = BoundedQueue::new(1);
+        let queue: BoundedQueue<u32> = BoundedQueue::new(1);
         queue.enqueue(1).unwrap();
         assert_eq!(queue.enqueue(2).expect_err(""), BoundedQueueError::Full);
     }
 
     #[test]
     fn spsc() {
-        let mut queue: Arc<RwLock<BoundedQueue<u32>>> = Arc::new(RwLock::new(BoundedQueue::new(1)));
-        let mut sender = queue.clone();
-        let mut receiver = queue.clone();
+        let queue: Arc<RwLock<BoundedQueue<u32>>> = Arc::new(RwLock::new(BoundedQueue::new(1)));
+        let sender = queue.clone();
+        let receiver = queue.clone();
 
         thread::spawn(move || {
             let tx = sender.read().unwrap();
@@ -172,10 +174,10 @@ mod tests {
 
     #[test]
     fn mpsc() {
-        let mut queue: Arc<RwLock<BoundedQueue<u32>>> = Arc::new(RwLock::new(BoundedQueue::new(1)));
-        let mut sender1 = queue.clone();
-        let mut sender2 = queue.clone();
-        let mut receiver = queue.clone();
+        let queue: Arc<RwLock<BoundedQueue<u32>>> = Arc::new(RwLock::new(BoundedQueue::new(1)));
+        let sender1 = queue.clone();
+        let sender2 = queue.clone();
+        let receiver = queue.clone();
 
         thread::spawn(move || {
             let tx = sender1.read().unwrap();
